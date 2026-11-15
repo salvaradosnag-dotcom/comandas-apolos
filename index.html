@@ -114,6 +114,11 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
         <label style="margin-top:14px">Intensidad de impresión (más alto = más oscuro)</label>
         <input type="range" id="energy" min="10" max="100" step="5">
         <button class="mini" id="testPrint" style="margin-top:8px">Imprimir prueba</button>
+        <label style="margin-top:14px">Tamaño de letra de la comanda</label>
+        <div class="seg" id="fsSeg"><button data-v="0.85">Chica</button><button data-v="1">Normal</button><button data-v="1.15">Grande</button><button data-v="1.3">Muy grande</button></div>
+        <label style="margin-top:14px">Logo (se imprime arriba de la comanda)</label>
+        <input type="file" id="logoIn" accept="image/*">
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px"><img id="logoPrev" alt="Logo" style="display:none;max-width:160px;max-height:80px;border:1px solid var(--line);background:#fff"><button class="mini" id="logoDel" style="display:none">Quitar logo</button></div>
       </div>
       <div class="hint" id="cfgHint">Crea, edita o borra productos y precios. Después toca "Guardar".</div>
     </div>
@@ -202,17 +207,18 @@ function buildTicket(){
   const ops=[];// collect draw ops then measure height
   const c=document.createElement("canvas");const ctx=c.getContext("2d");
   let y=0;
-  const text=(t,size,{bold=false,align="left",gap=6,indent=0}={})=>{
+  const text=(t,size,{bold=false,align="left",gap=6,indent=0}={})=>{size=Math.round(size*FS);
     ctx.font=`${bold?"800":"500"} ${size}px ${F}`;
     for(const ln of wrap(ctx,t,W-2*P-indent)){y+=size+2;ops.push({k:"t",t:ln,size,bold,align,y,indent})}
     y+=gap;
   };
   const rule=(dash)=>{y+=4;ops.push({k:"r",y,dash});y+=10};
-  const row=(l,r,size,bold)=>{y+=size+2;ops.push({k:"row",l,r,size,bold,y});y+=6};
+  const row=(l,r,size,bold)=>{size=Math.round(size*FS);y+=size+2;ops.push({k:"row",l,r,size,bold,y});y+=6};
   const now=new Date();
   const fecha=now.toLocaleDateString("es-CL")+" "+now.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});
-  text("APOLO'S",40,{bold:true,align:"center",gap:2});
-  text("Comida casera",20,{align:"center",gap:8});
+  if(logoImg){y+=4;ops.push({k:"img",y});y+=logoImg.height+8}
+  else{text("APOLO'S",40,{bold:true,align:"center",gap:2});
+  text("Comida casera",20,{align:"center",gap:8});}
   rule();
   row("COMANDA #"+num,"",34,true);
   text(fecha,20,{gap:4});
@@ -228,7 +234,7 @@ function buildTicket(){
     const ls=lines.filter(l=>l.cat===cat);const n=ls.reduce((s,l)=>s+l.qty,0);
     text(cat.toUpperCase()+" ("+n+")",20,{bold:true,gap:4});
     for(const l of ls){
-      row(l.qty+"x "+l.name,"",30,true);
+      text(l.qty+"x "+l.name,30,{bold:true,gap:0});
       if(l.mods.length)text("→ "+l.mods.join(", "),24,{bold:true,indent:18,gap:2});
       if(l.note)text("→ "+l.note,24,{indent:18,gap:2});
       y+=6;
@@ -244,7 +250,8 @@ function buildTicket(){
   c.width=W;c.height=Math.ceil(y);
   ctx.fillStyle="#fff";ctx.fillRect(0,0,W,c.height);ctx.fillStyle="#000";ctx.strokeStyle="#000";ctx.textBaseline="alphabetic";
   for(const o of ops){
-    if(o.k==="t"){ctx.font=`${o.bold?"800":"500"} ${o.size}px ${F}`;ctx.textAlign=o.align;
+    if(o.k==="img"){ctx.drawImage(logoImg,Math.round((W-logoImg.width)/2),o.y)}
+    else if(o.k==="t"){ctx.font=`${o.bold?"800":"500"} ${o.size}px ${F}`;ctx.textAlign=o.align;
       ctx.fillText(o.t,o.align==="center"?W/2:P+o.indent,o.y-4)}
     else if(o.k==="row"){ctx.font=`${o.bold?"800":"500"} ${o.size}px ${F}`;
       ctx.textAlign="left";let l=o.l;const rw=o.r?ctx.measureText(o.r).width+12:0;
@@ -387,6 +394,21 @@ function showHist(){$("form").style.display="none";$("out").style.display="none"
 $("histBtn").onclick=showHist;
 const _gen=$("genBtn").onclick;$("genBtn").onclick=()=>{_gen();if(lines.length)saveHist();if(lines.length)prnStatus(bt.tx?"✓ Conectada: "+bt.dev.name:"Impresora no conectada",!!bt.tx)};
 
+let FS=store.get("apolos_fs",1);let LOGO=store.get("apolos_logo",null);let logoImg=null;
+function loadLogo(){logoImg=null;if(!LOGO){$("logoPrev").style.display="none";$("logoDel").style.display="none";return}
+  const im=new Image();im.onload=()=>{logoImg=im};im.src=LOGO;$("logoPrev").src=LOGO;$("logoPrev").style.display="block";$("logoDel").style.display="inline-block"}
+$("fsSeg").querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.v===FS));
+seg("fsSeg",v=>{FS=+v;store.set("apolos_fs",FS);toast("Tamaño guardado")});
+$("logoIn").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
+  const sc=Math.min(320/im.width,150/im.height,1);const w=Math.max(1,Math.round(im.width*sc)),h=Math.max(1,Math.round(im.height*sc));
+  const c=document.createElement("canvas");c.width=w;c.height=h;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);
+  const d=x.getImageData(0,0,w,h);const g=new Float32Array(w*h);for(let i=0;i<w*h;i++)g[i]=0.299*d.data[i*4]+0.587*d.data[i*4+1]+0.114*d.data[i*4+2];
+  for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){const i=yy*w+xx,o=g[i],n=o<128?0:255,er=o-n;g[i]=n;
+    if(xx+1<w)g[i+1]+=er*7/16;if(yy+1<h){if(xx>0)g[i+w-1]+=er*3/16;g[i+w]+=er*5/16;if(xx+1<w)g[i+w+1]+=er/16}}
+  for(let i=0;i<w*h;i++){const v=g[i]<128?0:255;d.data[i*4]=d.data[i*4+1]=d.data[i*4+2]=v;d.data[i*4+3]=255}
+  x.putImageData(d,0,0);LOGO=c.toDataURL("image/png");store.set("apolos_logo",LOGO);loadLogo();toast("Logo guardado")};im.src=r.result};r.readAsDataURL(f)};
+$("logoDel").onclick=()=>{LOGO=null;store.set("apolos_logo",null);$("logoIn").value="";loadLogo()};
+loadLogo();
 renderMenu();renderLines();
 if(!menu.length)openCfg();
 </script>
