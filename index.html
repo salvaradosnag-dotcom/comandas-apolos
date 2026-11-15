@@ -86,14 +86,16 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
       <h2>Menú y precios <button class="mini" id="toggleCfg" style="float:right">Editar</button></h2>
       <div id="cfg" style="display:none">
         <div id="cfgRows"></div>
+        <datalist id="catList"></datalist>
         <button class="mini" id="addProd">+ Producto</button>
+        <button class="mini" id="clearProds">Borrar todos</button>
         <button class="mini" id="saveCfg" style="float:right;background:var(--ink);color:#fff">Guardar</button>
         <label style="margin-top:14px">N° de la próxima comanda</label><input id="numIn" inputmode="numeric" style="width:120px">
         <label style="margin-top:14px">Intensidad de impresión (más alto = más oscuro)</label>
         <input type="range" id="energy" min="10" max="100" step="5">
         <button class="mini" id="testPrint" style="margin-top:8px">Imprimir prueba</button>
       </div>
-      <div class="hint" id="cfgHint">Precios de ejemplo. Toca "Editar" para poner los reales.</div>
+      <div class="hint" id="cfgHint">Crea, edita o borra productos y precios. Después toca "Guardar".</div>
     </div>
   </div>
 
@@ -113,18 +115,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
 <div class="toast" id="toast"></div>
 
 <script>
-const DEFAULT_MENU=[
- {cat:"Empanadas",name:"Empanada de pino",price:2500},
- {cat:"Empanadas",name:"Empanada de queso",price:2000},
- {cat:"Empanadas",name:"Empanada napolitana",price:2500},
- {cat:"Empanadas",name:"Empanada pollo",price:2500},
- {cat:"Completos",name:"Completo",price:2500},
- {cat:"Completos",name:"Italiano",price:3000},
- {cat:"Completos",name:"Dinámico",price:3500},
- {cat:"Completos",name:"As italiano",price:4500},
- {cat:"Bebidas",name:"Bebida lata",price:1500},
- {cat:"Bebidas",name:"Jugo",price:1500}
-];
+const DEFAULT_MENU=[];
 const MODS={
  "Empanadas":["Frita","Al horno","Sin aceituna","Sin huevo"],
  "Completos":["Sin mayo","Extra mayo","Sin palta","Sin tomate","Sin chucrut","Sin ketchup","Sin mostaza"],
@@ -139,6 +130,8 @@ const clp=n=>"$"+Math.round(n).toLocaleString("es-CL");
 function toast(t){const e=$("toast");e.textContent=t;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),1400)}
 
 function renderMenu(){
+  if(!menu.length){$("menu").innerHTML='<div class="empty">Aún no hay productos.<br><button class="mini" id="goCfg" style="margin-top:8px;background:var(--ink);color:#fff">+ Crear productos</button></div>';
+    $("goCfg").onclick=openCfg;$("numTag").textContent="#"+num;return}
   const cats=[...new Set(menu.map(m=>m.cat))];
   $("menu").innerHTML=cats.map(c=>`<label style="margin-top:4px">${c}</label><div class="grid">`+
    menu.map((m,i)=>m.cat===c?`<button class="item" data-i="${i}">${esc(m.name)}<small>${clp(m.price)}</small></button>`:"").join("")+`</div>`).join("");
@@ -265,18 +258,23 @@ $("copyTxt").onclick=async()=>{try{await navigator.clipboard.writeText(ticketTex
 /* ---------- config ---------- */
 function renderCfg(){
   const cats=[...new Set([...Object.keys(MODS),...menu.map(m=>m.cat)])];
-  $("cfgRows").innerHTML=menu.map((m,i)=>`<div class="prow">
-   <select data-i="${i}" data-f="cat">${cats.map(c=>`<option ${c===m.cat?"selected":""}>${esc(c)}</option>`).join("")}</select>
-   <input data-i="${i}" data-f="name" value="${esc(m.name)}">
-   <input class="p" data-i="${i}" data-f="price" inputmode="numeric" value="${m.price}">
+  $("catList").innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join("");
+  $("cfgRows").innerHTML=(menu.length?'<div class="hint" style="margin-bottom:6px">Categoría · Nombre · Precio</div>':'<div class="empty">Toca "+ Producto" para crear el primero</div>')+menu.map((m,i)=>`<div class="prow">
+   <input data-i="${i}" data-f="cat" list="catList" value="${esc(m.cat)}" placeholder="Categoría" style="width:110px;flex:none;padding:8px">
+   <input data-i="${i}" data-f="name" value="${esc(m.name)}" placeholder="Nombre">
+   <input class="p" data-i="${i}" data-f="price" inputmode="numeric" value="${m.price||""}" placeholder="Precio">
    <button class="del" data-x="${i}">✕</button></div>`).join("");
   $("cfgRows").querySelectorAll("[data-f]").forEach(el=>el.oninput=el.onchange=()=>{const m=menu[+el.dataset.i];
     m[el.dataset.f]=el.dataset.f==="price"?(parseInt(el.value.replace(/\D/g,""))||0):el.value});
   $("cfgRows").querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{menu.splice(+b.dataset.x,1);renderCfg()});
   $("numIn").value=num;
 }
+function openCfg(){if($("cfg").style.display==="none")$("toggleCfg").onclick();$("cfg").scrollIntoView({behavior:"smooth"})}
 $("toggleCfg").onclick=()=>{const o=$("cfg").style.display==="none";$("cfg").style.display=o?"block":"none";$("cfgHint").style.display=o?"none":"block";$("toggleCfg").textContent=o?"Cerrar":"Editar";if(o)renderCfg()};
-$("addProd").onclick=()=>{menu.push({cat:"Empanadas",name:"Nuevo producto",price:0});renderCfg()};
+$("addProd").onclick=()=>{const last=menu[menu.length-1];menu.push({cat:last?last.cat:"Empanadas",name:"",price:0});renderCfg();
+  const ins=$("cfgRows").querySelectorAll('[data-f="name"]');ins[ins.length-1].focus()};
+$("clearProds").onclick=()=>{if($("clearProds").dataset.sure){menu=[];store.set("apolos_menu",menu);renderCfg();renderMenu();$("clearProds").textContent="Borrar todos";delete $("clearProds").dataset.sure;toast("Productos borrados")}
+  else{$("clearProds").dataset.sure=1;$("clearProds").textContent="¿Seguro? Toca de nuevo"}};
 $("saveCfg").onclick=()=>{menu=menu.filter(m=>m.name.trim());num=parseInt($("numIn").value)||num;
   store.set("apolos_menu",menu);store.set("apolos_num",num);renderMenu();renderCfg();toast("Guardado")};
 
@@ -349,6 +347,7 @@ $("shareImg").onclick=async()=>{try{const blob=await (await fetch($("img").src))
 const _gen=$("genBtn").onclick;$("genBtn").onclick=()=>{_gen();if(lines.length)prnStatus(bt.tx?"✓ Conectada: "+bt.dev.name:"Impresora no conectada",!!bt.tx)};
 
 renderMenu();renderLines();
+if(!menu.length)openCfg();
 </script>
 </body>
 </html>
