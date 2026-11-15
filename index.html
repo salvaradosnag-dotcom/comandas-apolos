@@ -72,7 +72,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
 </style>
 </head>
 <body>
-<header><h1>Comandas Apolo's</h1><span class="num" id="numTag">#1</span></header>
+<header><h1>Comandas Apolo's</h1><span style="display:flex;gap:8px;align-items:center"><button class="mini" id="histBtn">🕘 Anteriores</button><span class="num" id="numTag">#1</span></span></header>
 <main>
   <div id="form">
     <div class="card" id="cardAdd">
@@ -119,6 +119,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
     </div>
   </div>
 
+  <div id="hist" style="display:none"></div>
   <div id="out">
     <div class="card">
       <div class="hint"><b>Para imprimir:</b> mantén presionada la imagen → <b>Guardar en Fotos</b> (o hazle captura) → abre <b>Tiny Print</b> → imprime la foto con ancho completo.</div>
@@ -266,7 +267,7 @@ function ticketText(){
   if($("obs").value.trim())L.push("Obs: "+$("obs").value.trim());
   return L.join("\n");
 }
-function show(out){$("form").style.display=out?"none":"block";$("out").style.display=out?"block":"none";
+function show(out){$("hist").style.display="none";$("form").style.display=out?"none":"";$("out").style.display=out?"block":"none";
   $("barForm").style.display=out?"none":"flex";$("barOut").style.display=out?"flex":"none";window.scrollTo(0,0)}
 $("genBtn").onclick=()=>{if(!lines.length){toast("Agrega al menos un producto");return}
   $("img").src=buildTicket();show(true)};
@@ -375,7 +376,16 @@ $("testPrint").onclick=()=>{const c=document.createElement("canvas");c.width=384
 $("energy").value=energyPct;$("energy").oninput=e=>{energyPct=+e.target.value;store.set("apolos_energy",energyPct)};
 $("shareImg").onclick=async()=>{try{const blob=await (await fetch($("img").src)).blob();
   const f=new File([blob],"comanda-"+num+".png",{type:"image/png"});await navigator.share({files:[f]})}catch(e){toast("Mantén presionada la imagen para guardarla")}};
-const _gen=$("genBtn").onclick;$("genBtn").onclick=()=>{_gen();if(lines.length)prnStatus(bt.tx?"✓ Conectada: "+bt.dev.name:"Impresora no conectada",!!bt.tx)};
+let hist=store.get("apolos_hist",[]);
+function setCanvasFrom(url){const im=new Image();im.onload=()=>{const c=document.createElement("canvas");c.width=im.width;c.height=im.height;c.getContext("2d").drawImage(im,0,0);lastCanvas=c};im.src=url}
+function saveHist(){const img=$("img").src;hist=hist.filter(h=>h.n!==num);hist.unshift({n:num,t:new Date().toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"}),c:$("cliente").value.trim(),img});hist=hist.slice(0,20);store.set("apolos_hist",hist)}
+function showHist(){$("form").style.display="none";$("out").style.display="none";$("barForm").style.display="none";$("barOut").style.display="none";
+  $("hist").style.display="block";window.scrollTo(0,0);
+  $("hist").innerHTML='<div class="card"><h2>Comandas anteriores <button class="mini" id="histBack" style="float:right">← Volver</button></h2>'+(hist.length?hist.map((h,i)=>`<button class="item" data-h="${i}" style="width:100%;margin:6px 0;display:flex;justify-content:space-between"><span>Comanda #${h.n}${h.c?" · "+esc(h.c):""}</span><small style="margin:0">${h.t}</small></button>`).join(""):'<div class="empty">Aún no hay comandas</div>')+'</div>';
+  $("histBack").onclick=()=>show(false);
+  $("hist").querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>{const h=hist[+b.dataset.h];$("img").src=h.img;setCanvasFrom(h.img);show(true);prnStatus(bt.tx?"✓ Conectada: "+bt.dev.name:"Comanda #"+h.n+" (reimpresión)",!!bt.tx)})}
+$("histBtn").onclick=showHist;
+const _gen=$("genBtn").onclick;$("genBtn").onclick=()=>{_gen();if(lines.length)saveHist();if(lines.length)prnStatus(bt.tx?"✓ Conectada: "+bt.dev.name:"Impresora no conectada",!!bt.tx)};
 
 renderMenu();renderLines();
 if(!menu.length)openCfg();
