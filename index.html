@@ -276,6 +276,7 @@ $("newBtn").onclick=()=>{num++;store.set("apolos_num",num);clearForm();renderMen
 $("copyTxt").onclick=async()=>{try{await navigator.clipboard.writeText(ticketText());toast("Copiado")}catch(e){toast("No se pudo copiar")}};
 
 /* ---------- config ---------- */
+function autoSave(){store.set("apolos_menu",menu.filter(m=>String(m.name).trim()));renderMenu()}
 function renderCfg(){
   const cats=[...new Set([...Object.keys(MODS),...menu.map(m=>m.cat)])];
   $("catList").innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join("");
@@ -285,8 +286,8 @@ function renderCfg(){
    <input class="p" data-i="${i}" data-f="price" inputmode="numeric" value="${m.price||""}" placeholder="Precio">
    <button class="del" data-x="${i}">✕</button></div>`).join("");
   $("cfgRows").querySelectorAll("[data-f]").forEach(el=>el.oninput=el.onchange=()=>{const m=menu[+el.dataset.i];
-    m[el.dataset.f]=el.dataset.f==="price"?(parseInt(el.value.replace(/\D/g,""))||0):el.value});
-  $("cfgRows").querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{menu.splice(+b.dataset.x,1);renderCfg()});
+    m[el.dataset.f]=el.dataset.f==="price"?(parseInt(el.value.replace(/\D/g,""))||0):el.value;autoSave()});
+  $("cfgRows").querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{menu.splice(+b.dataset.x,1);renderCfg();autoSave()});
   $("numIn").value=num;
 }
 function openCfg(){if($("cfg").style.display==="none")$("toggleCfg").onclick();$("cfg").scrollIntoView({behavior:"smooth"})}
