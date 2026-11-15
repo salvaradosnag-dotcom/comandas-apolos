@@ -122,6 +122,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
   <div id="out">
     <div class="card">
       <div class="hint"><b>Para imprimir:</b> mantén presionada la imagen → <b>Guardar en Fotos</b> (o hazle captura) → abre <b>Tiny Print</b> → imprime la foto con ancho completo.</div>
+      <div style="display:flex;align-items:center;gap:12px;margin:8px 0"><b>Copias</b><div class="qty"><button id="cpM">−</button><span id="cpN">1</span><button id="cpP">+</button></div></div>
       <div id="prnBox" style="margin:8px 0"></div>
       <img id="img" alt="Comanda">
       <button class="mini" id="copyTxt">Copiar como texto</button>
@@ -131,7 +132,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
 </main>
 
 <div class="bar" id="barForm"><button class="sec" id="clearBtn">Limpiar</button><button class="pri" id="genBtn">Generar comanda</button></div>
-<div class="bar" id="barOut" style="display:none"><button class="sec" id="backBtn">Editar</button><button class="pri" id="printBtn">🖨 Imprimir</button><button class="sec" id="newBtn">Nueva</button></div>
+<div class="bar" id="barOut" style="display:none"><button class="sec" id="backBtn">← Volver</button><button class="pri" id="printBtn">🖨 Imprimir</button><button class="sec" id="newBtn">Nueva</button></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -343,7 +344,7 @@ function canvasToLines(canvas){
     rows.push(row)}
   return rows;
 }
-async function printCanvas(canvas){
+async function printCanvas(canvas,n=1){
   if(bt.busy)return;
   if(!bt.tx)await connect();
   bt.busy=true;$("printBtn").textContent="Imprimiendo…";
@@ -353,15 +354,20 @@ async function printCanvas(canvas){
       ...pc(0xa6,[0xaa,0x55,0x17,0x38,0x44,0x5f,0x5f,0x5f,0x44,0x38,0x2c])];
     await write(buf);
     const rows=canvasToLines(canvas);
-    for(let i=0;i<rows.length;i+=3){let b=[];for(const r of rows.slice(i,i+3))b.push(...pc(0xa2,r));await write(b)}
+    for(let c=0;c<n;c++){
+      for(let i=0;i<rows.length;i+=3){let b=[];for(const r of rows.slice(i,i+3))b.push(...pc(0xa2,r));await write(b)}
+      if(c<n-1)await write(pc(0xa1,[0x50,0x00]));
+    }
     await write([...pc(0xa1,[0x60,0x00]),...pc(0xa6,[0xaa,0x55,0x17,0,0,0,0,0,0,0,0x17]),...pc(0xa3,[0])]);
     toast("Impreso");
   }finally{bt.busy=false;$("printBtn").textContent="🖨 Imprimir"}
 }
-let lastCanvas=null;
+let lastCanvas=null;let copies=1;
+const setCp=v=>{copies=Math.max(1,Math.min(10,v));$("cpN").textContent=copies};
+$("cpM").onclick=()=>setCp(copies-1);$("cpP").onclick=()=>setCp(copies+1);
 const _build=buildTicket;
 buildTicket=function(){const url=_build();const im=new Image();im.onload=()=>{const c=document.createElement("canvas");c.width=im.width;c.height=im.height;c.getContext("2d").drawImage(im,0,0);lastCanvas=c};im.src=url;return url};
-$("printBtn").onclick=()=>{if(!lastCanvas)return;printCanvas(lastCanvas).catch(e=>{prnStatus("Error al imprimir: "+errMsg(e));toast("No imprimió")})};
+$("printBtn").onclick=()=>{if(!lastCanvas)return;printCanvas(lastCanvas,copies).catch(e=>{prnStatus("Error al imprimir: "+errMsg(e));toast("No imprimió")})};
 $("testPrint").onclick=()=>{const c=document.createElement("canvas");c.width=384;c.height=170;const x=c.getContext("2d");
   x.fillStyle="#fff";x.fillRect(0,0,384,170);x.fillStyle="#000";x.font="800 34px sans-serif";x.fillText("PRUEBA APOLO'S",10,50);
   x.font="600 24px sans-serif";x.fillText("Intensidad "+energyPct+"%",10,95);x.fillRect(10,115,364,30);
